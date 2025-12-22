@@ -57,9 +57,11 @@ class ModelInput:
         if self.mem_indexes is None:
             self.mem_indexes = self.mem_indexes_cpu.cuda(non_blocking=True)
         self.b_req_idx = self.b_req_idx.cuda(non_blocking=True)
+        self.b_seq_len_cpu = self.b_seq_len
         self.b_seq_len = self.b_seq_len.cuda(non_blocking=True)
         self.b_mtp_index = self.b_mtp_index.cuda(non_blocking=True)
         if self.b_ready_cache_len is not None:
+            self.b_ready_cache_len_cpu = self.b_ready_cache_len
             self.b_ready_cache_len = self.b_ready_cache_len.cuda(non_blocking=True)
         if self.b_prefill_start_loc is not None:
             self.b_prefill_start_loc = self.b_prefill_start_loc.cuda(non_blocking=True)
@@ -89,6 +91,9 @@ class ModelOutput:
     # 输出最后一层的hidden state 状态用于 draft 模型的 deepseekv3_mtp_draft_input_hiddens
     # 输入
     deepseekv3_mtp_main_output_hiddens: Optional[torch.Tensor] = None
+
+    # 返回输入的hidden states，用于x2v生成模型里的多模态编码部分的加速
+    input_hidden_states: Optional[torch.Tensor] = None
 
     def to_no_ref_tensor(self):
         self.logits = tensor_to_no_ref_tensor(self.logits)

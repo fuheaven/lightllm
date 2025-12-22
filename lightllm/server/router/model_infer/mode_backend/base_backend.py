@@ -98,6 +98,7 @@ class ModeBackend:
         self.is_multinode_tp = self.args.nnodes > 1 and self.args.dp == 1
         self.is_nixl_pd_mode = self.run_mode in ["nixl_prefill", "nixl_decode"]
         self.is_nixl_decode_mode = self.run_mode == "nixl_decode"
+        self.return_input_hidden_states = self.args.return_input_hidden_states
 
         self.logger = init_logger(__name__)
 
@@ -787,6 +788,27 @@ class ModeBackend:
             next_token_ids, next_token_logprobs
         )
         return next_token_ids, next_token_ids_cpu, next_token_logprobs_cpu
+
+    def _async_copy_hidden_states_to_pin_mem(self, input_hidden_states: torch.Tensor):
+        if not self.return_input_hidden_states:
+            return None
+        input_hidden_states_cpu = g_pin_mem_manager.async_copy_from_gpu_tensor(
+            key="input_hidden_states",
+            gpu_tensor=input_hidden_states,
+        )
+        return input_hidden_states_cpu
+
+    def _save_hidden_states_to_reqs(
+        self, run_reqs: List[InferReq], input_hidden_states_cpu: torch.Tensor, model_input: ModelInput
+    ):
+        if not self.return_input_hidden_states:
+            return
+        b_input_len = model_input.b_seq_len_cpu - model_input.b_ready_cache_len_cpu
+        start_index = 0
+        for req, seq_len in zip(run_reqs, b_input_len):
+            req.save_hidden_states(input_hidden_states_cpu[start_index : start_index + seq_len])
+            start_index += seq_len
+        return
 
     def _dp_all_gather_prefill_and_decode_req_num(
         self, prefill_reqs: List[InferReq], decode_reqs: List[InferReq]

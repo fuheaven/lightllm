@@ -13,6 +13,7 @@ from lightllm.utils.envs_utils import get_env_start_args
 from lightllm.utils.kv_cache_utils import compute_token_list_hash
 from typing import List, Any, Union
 from lightllm.utils.log_utils import init_logger
+from lightllm.utils.config_utils import get_hidden_size, get_dtype_size
 
 logger = init_logger(__name__)
 
@@ -173,6 +174,8 @@ class Req(ctypes.Structure):
         self.alloc_shm_numpy_len = self.input_len + self.sample_params.max_new_tokens + 1024  # + 1024 for safe
         self.create_logprobs_shm_array()
         self.create_prompt_ids_shm_array()
+        self.create_hidden_states_shm_array()
+
         self.chunked_prefill_size = chunked_prefill_size
         self.shm_prompt_ids.arr[0 : len(prompt_ids)] = prompt_ids
         self.mtp_accepted_token_num = 0
@@ -199,32 +202,54 @@ class Req(ctypes.Structure):
         self.cpu_cache_match_page_indexes = CpuCachePageList()
         return
 
+    def create_shm_arrays(self, name, shape, dtype):
+        service_unique_name = get_unique_server_name()
+        shm_name = f"{service_unique_name}_{name}_{self.index_in_shm_mem}"
+        shm_array = ShmArray(shm_name, shape=shape, dtype=dtype)
+        shm_array.create_shm()
+        setattr(self, name, shm_array)
+        return
+
+    def link_shm_arrays(self, name, shape, dtype):
+        service_unique_name = get_unique_server_name()
+        shm_name = f"{service_unique_name}_{name}_{self.index_in_shm_mem}"
+        shm_array = ShmArray(shm_name, shape=shape, dtype=dtype)
+        shm_array.link_shm()
+        setattr(self, name, shm_array)
+        return
+
     def create_prompt_ids_shm_array(self):
-        service_uni_name = get_unique_server_name()
-        name = f"{service_uni_name}_shm_prompts_{self.index_in_shm_mem}"
-        self.shm_prompt_ids = ShmArray(name, (self.alloc_shm_numpy_len,), dtype=np.int64)
-        self.shm_prompt_ids.create_shm()
+        self.create_shm_arrays("shm_prompt_ids", shape=(self.alloc_shm_numpy_len,), dtype=np.int64)
         return
 
     def link_prompt_ids_shm_array(self):
-        service_uni_name = get_unique_server_name()
-        name = f"{service_uni_name}_shm_prompts_{self.index_in_shm_mem}"
-        self.shm_prompt_ids = ShmArray(name, (self.alloc_shm_numpy_len,), dtype=np.int64)
-        self.shm_prompt_ids.link_shm()
+        self.link_shm_arrays("shm_prompt_ids", shape=(self.alloc_shm_numpy_len,), dtype=np.int64)
         return
 
     def create_logprobs_shm_array(self):
-        service_uni_name = get_unique_server_name()
-        name = f"{service_uni_name}_shm_logprobs_{self.index_in_shm_mem}"
-        self.shm_logprobs = ShmArray(name, (self.alloc_shm_numpy_len,), dtype=np.float32)
-        self.shm_logprobs.create_shm()
+        self.create_shm_arrays("shm_logprobs", shape=(self.alloc_shm_numpy_len,), dtype=np.float32)
         return
 
     def link_logprobs_shm_array(self):
-        service_uni_name = get_unique_server_name()
-        name = f"{service_uni_name}_shm_logprobs_{self.index_in_shm_mem}"
-        self.shm_logprobs = ShmArray(name, (self.alloc_shm_numpy_len,), dtype=np.float32)
-        self.shm_logprobs.link_shm()
+        self.link_shm_arrays("shm_logprobs", shape=(self.alloc_shm_numpy_len,), dtype=np.float32)
+        return
+
+    def create_hidden_states_shm_array(self):
+        if not get_env_start_args().return_input_hidden_states:
+            return
+        hidden_size = get_hidden_size(get_env_start_args().model_dir)
+        dtype_byte_num = get_dtype_size(get_env_start_args().model_dir)
+        self.create_shm_arrays(
+            "shm_hidden_states", shape=(self.input_len, hidden_size * dtype_byte_num), dtype=np.uint8
+        )
+        return
+
+    def link_hidden_states_shm_array(self):
+        if not get_env_start_args().return_input_hidden_states:
+            return
+        hidden_size = get_hidden_size(get_env_start_args().model_dir)
+        dtype_byte_num = get_dtype_size(get_env_start_args().model_dir)
+        self.link_shm_arrays("shm_hidden_states", shape=(self.input_len, hidden_size * dtype_byte_num), dtype=np.uint8)
         return
 
     def get_prompt_ids(self):

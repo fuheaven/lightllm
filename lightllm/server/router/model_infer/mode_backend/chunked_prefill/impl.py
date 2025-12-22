@@ -120,6 +120,9 @@ class ChunkedPrefillBackend(ModeBackend):
                 b_prefill_has_output_cpu=model_input.b_prefill_has_output_cpu,
                 mask_func=self.prefill_mask_func,
             )
+            input_hidden_states_cpu = self._async_copy_hidden_states_to_pin_mem(
+                input_hidden_states=model_output.input_hidden_states.view(torch.uint8),
+            )
             sync_event = torch.cuda.Event()
             sync_event.record()
 
@@ -130,6 +133,9 @@ class ChunkedPrefillBackend(ModeBackend):
         # 第三阶段
         event_pack.notify_forward_and_wait_post_handle()
         sync_event.synchronize()
+        self._save_hidden_states_to_reqs(
+            run_reqs=run_reqs, input_hidden_states_cpu=input_hidden_states_cpu, model_input=model_input
+        )
         self._post_handle(
             run_reqs=run_reqs,
             next_token_ids=next_token_ids_cpu,

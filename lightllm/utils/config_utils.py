@@ -33,6 +33,7 @@ def _get_config_llm_keyvalue(model_path: str, key_name: list[str]):
     return None
 
 
+@lru_cache(maxsize=None)
 def get_hidden_size(model_path: str) -> Optional[int]:
     hidden_size = _get_config_llm_keyvalue(model_path=model_path, key_name=["hidden_size", "n_embd", "n_embed"])
     if isinstance(hidden_size, int):
@@ -122,6 +123,19 @@ def get_dtype(model_path: str):
         return "float16"
     else:
         return torch_dtype
+
+
+@lru_cache(maxsize=None)
+def get_dtype_size(model_path: str) -> int:
+    dtype = get_dtype(model_path)
+    if dtype in ["float16", "fp16", "bfloat16", "bf16"]:
+        return 2
+    elif dtype in ["float32", "fp32"]:
+        return 4
+    elif dtype in ["int8", "uint8", "fp8"]:
+        return 1
+    else:
+        raise ValueError(f"Unsupported dtype: {dtype}")
 
 
 @lru_cache(maxsize=None)

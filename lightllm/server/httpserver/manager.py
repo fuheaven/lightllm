@@ -379,7 +379,10 @@ class HttpServerManager:
                 if is_first_gen_token:
                     metadata["input_usage"] = input_usage
                     is_first_gen_token = False
-
+                    if self.args.return_input_hidden_states:
+                        metadata["hidden_states"] = req_status.group_req_objs.shm_req_objs[
+                            0
+                        ].shm_hidden_states.arr.tolist()
                 yield sub_req_id, request_output, metadata, finish_status
 
         except Exception as e:

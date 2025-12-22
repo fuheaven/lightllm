@@ -372,6 +372,7 @@ class InferReq:
         self.shm_req = g_infer_context.shm_req_manager.get_req_obj_by_index(self.shm_index)
         self.shm_req.link_prompt_ids_shm_array()
         self.shm_req.link_logprobs_shm_array()
+        self.shm_req.link_hidden_states_shm_array()
         self.sampling_param: InferSamplingParams = InferSamplingParams(self.shm_req, self.vocab_size)
 
         # 更新 nixl pd 分离模式下， prefill 节点需要开始传输的起始位置
@@ -379,6 +380,7 @@ class InferReq:
             self.nixl_trans_kv_start_index = self.sampling_param.nixl_decode_node.ready_kv_len
 
         self.cur_kv_len = 0
+        self.pre_kv_len = 0
         self.cur_output_len = 0
 
         g_infer_context.req_manager.req_sampling_params_manager.init_req_sampling_params(self)
@@ -412,6 +414,7 @@ class InferReq:
                 self.shm_req.prompt_cache_len = self.cur_kv_len  # 记录 prompt cache 的命中长度
 
         self.shm_req.shm_cur_kv_len = self.cur_kv_len
+        self.pre_kv_len = self.cur_kv_len
         return
 
     def is_master_req(self):
@@ -491,6 +494,11 @@ class InferReq:
             self.finish_status.set_status(FinishStatus.FINISHED_STOP)
         elif output_len >= self.sampling_param.shm_param.max_new_tokens:
             self.finish_status.set_status(FinishStatus.FINISHED_LENGTH)
+        return
+
+    def save_hidden_states(self, hidden_states: torch.Tensor):
+        self.shm_req.shm_hidden_states.arr[self.pre_kv_len : self.cur_kv_len] = hidden_states
+        self.pre_kv_len = self.cur_kv_len
         return
 
     def _stop_sequences_matched(self, output_len: int):

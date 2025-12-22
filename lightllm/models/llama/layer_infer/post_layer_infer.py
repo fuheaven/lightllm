@@ -64,6 +64,29 @@ class LlamaPostLayerInfer(PostLayerInferTpl):
 
         assert False, "Error State"
 
+    def get_hidden_states(
+        self, input_embdings, infer_state: LlamaInferStateInfo, layer_weight: LlamaPreAndPostLayerWeight
+    ):
+        return self._norm(input_embdings, infer_state, layer_weight)
+
+    def get_hidden_states_tpsp(
+        self, input_embdings, infer_state: LlamaInferStateInfo, layer_weight: LlamaPreAndPostLayerWeight
+    ):
+        if self.tp_world_size_ > 1:
+            assert len(input_embdings.shape) == 2
+            token_num, hidden_dim = input_embdings.shape
+            gather_data = torch.empty(
+                (self.tp_world_size_ * token_num, hidden_dim), device=input_embdings.device, dtype=input_embdings.dtype
+            )
+            all_gather(
+                [gather_data[i * token_num : (i + 1) * token_num, :] for i in range(self.tp_world_size_)],
+                input_embdings,
+                group=infer_state.dist_group,
+                async_op=False,
+            )
+            input_embdings = gather_data[0 : len(infer_state.position_sin)]
+        return self._norm(input_embdings, infer_state, layer_weight)
+
     def token_forward(self, input_embdings, infer_state: LlamaInferStateInfo, layer_weight: LlamaPreAndPostLayerWeight):
         last_input, token_num = self._slice_get_last_input(input_embdings, infer_state)
         input_embdings_dtype = input_embdings.dtype

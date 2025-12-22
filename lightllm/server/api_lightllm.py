@@ -53,6 +53,7 @@ async def lightllm_generate(request: Request, httpserver_manager: HttpServerMana
     prompt_token_ids = None
     is_first_metadata = True
     input_usage = None
+    hidden_states = None
     async for sub_req_id, request_output, metadata, finish_status in results_generator:
         # when set "--return_all_prompt_logprobs", the first token metadata will contains
         # prompt_logprobs and prompt_token_ids
@@ -61,6 +62,7 @@ async def lightllm_generate(request: Request, httpserver_manager: HttpServerMana
             prompt_token_ids = metadata.get("prompt_token_ids", None)
             prompt_tokens = metadata.get("prompt_tokens", 0)
             input_usage = metadata.get("input_usage", None)
+            hidden_states = metadata.get("hidden_states", None)
             if prompt_logprobs is not None:
                 del metadata["prompt_logprobs"]
             if prompt_token_ids is not None:
@@ -94,6 +96,8 @@ async def lightllm_generate(request: Request, httpserver_manager: HttpServerMana
         "finish_reason": ret_data_format(finish_reson_list),
         "prompt_tokens": prompt_tokens,
     }
+    if hidden_states is not None:
+        ret["hidden_states"] = hidden_states
     if return_details:
         ret["tokens"] = ret_data_format(tokens_list)
     if prompt_token_ids is not None:

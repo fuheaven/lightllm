@@ -349,6 +349,9 @@ def make_argument_parser() -> argparse.ArgumentParser:
         help="the data type of the model weight",
     )
     parser.add_argument("--return_all_prompt_logprobs", action="store_true", help="return all prompt tokens logprobs")
+    parser.add_argument(
+        "--return_input_hidden_states", action="store_true", help="return input prompt hidden states for lightx2v"
+    )
 
     parser.add_argument("--use_reward_model", action="store_true", help="use reward model")
 

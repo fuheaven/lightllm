@@ -90,6 +90,7 @@ class TpPartBaseModel:
         self.enable_tpsp_mix_mode = get_env_start_args().enable_tpsp_mix_mode
 
         self.is_deepseekv3_mtp_mode = self.args.mtp_mode in ["deepseekv3_vanilla", "deepseekv3_eagle"]
+        self.return_input_hidden_states = self.args.return_input_hidden_states
         self.prefill_graph: PrefillCudaGraph = None
 
         self._init_config()
@@ -417,6 +418,11 @@ class TpPartBaseModel:
             _hidden_states = new_model_output.deepseekv3_mtp_main_output_hiddens
             new_model_output.deepseekv3_mtp_main_output_hiddens = _hidden_states[0:origin_handle_token_num]
 
+        #
+        if new_model_output.input_hidden_states is not None:
+            _hidden_states = new_model_output.input_hidden_states
+            new_model_output.input_hidden_states = _hidden_states[0:origin_handle_token_num]
+
         return new_model_output
 
     def _prefill(
@@ -549,6 +555,12 @@ class TpPartBaseModel:
         post_method = (self.post_infer.token_forward, self.post_infer.tpsp_token_forward)[run_mode_index]
         predict_logits = post_method(input_embs, infer_state, self.pre_post_weight)
         model_output = ModelOutput(logits=predict_logits)
+
+        if self.return_input_hidden_states:
+            get_hidden_states_method = (self.post_infer.get_hidden_states, self.post_infer.get_hidden_states_tpsp)[
+                run_mode_index
+            ]
+            model_output.input_hidden_states = get_hidden_states_method(input_embs, infer_state, self.pre_post_weight)
 
         # 特殊模型特殊模式的额外输出
         if self.is_deepseekv3_mtp_mode:
