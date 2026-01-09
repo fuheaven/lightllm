@@ -200,7 +200,7 @@ def normal_or_p_d_start(args):
         ), "chunked prefill mode, batch_max_tokens must >= chunked_prefill_size"
 
     if args.return_input_hidden_states:
-        assert args.disable_dynamic_prompt_cache is False, "need add --disable_dynamic_prompt_cache"
+        assert args.disable_dynamic_prompt_cache is True, "need add --disable_dynamic_prompt_cache"
 
     # help to manage data stored on Ceph
     if "s3://" in args.model_dir:
